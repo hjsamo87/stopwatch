@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스탑워치 · 빛의 궤적</title>
+<style>
+  :root {
+    --cyan: 94, 231, 255;
+    --pink: 255, 94, 203;
+    --gold: 255, 226, 120;
+    --violet: 138, 123, 255;
+    --mx: 30%; --my: 20%;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; display: flex; align-items: center; justify-content: center; padding: 16px;
+    color: #eef2ff; font-family: system-ui, "Malgun Gothic", sans-serif; overflow: hidden; background: #04050d;
+  }
+
+  /* ================= 배경 레이어 ================= */
+  .layer { position: fixed; inset: 0; pointer-events: none; }
+  /* 성운: 천천히 떠다니는 거대한 색 덩어리 */
+  .nebula { z-index: 0; opacity: .25; transition: opacity 5s ease; overflow: hidden; }
+  .nebula.on { opacity: 1; }
+  .blob { position: absolute; border-radius: 50%; filter: blur(70px); mix-blend-mode: screen; will-change: transform; }
+  .b1 { width: 70vmax; height: 70vmax; left: -20vmax; top: -25vmax; background: radial-gradient(circle, rgba(var(--pink), .5), transparent 65%); animation: drift1 26s ease-in-out infinite alternate; }
+  .b2 { width: 80vmax; height: 80vmax; right: -30vmax; bottom: -35vmax; background: radial-gradient(circle, rgba(var(--cyan), .45), transparent 65%); animation: drift2 32s ease-in-out infinite alternate; }
+  .b3 { width: 55vmax; height: 55vmax; left: 30vmax; top: 20vmax; background: radial-gradient(circle, rgba(var(--violet), .4), transparent 65%); animation: drift3 22s ease-in-out infinite alternate; }
+  @keyframes drift1 { to { transform: translate(18vmax, 12vmax) scale(1.2); } }
+  @keyframes drift2 { to { transform: translate(-16vmax, -10vmax) scale(1.15); } }
+  @keyframes drift3 { to { transform: translate(-12vmax, 14vmax) scale(.8); } }
+  /* 오로라 리본 */
+  .aurora { z-index: 0; opacity: 0; transition: opacity 6s ease; mix-blend-mode: screen; }
+  .aurora.on { opacity: .5; }
+  .aurora::before {
+    content: ""; position: absolute; left: 50%; top: 50%; width: 160vmax; height: 160vmax; margin: -80vmax 0 0 -80vmax;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(var(--cyan), .22) 40deg, transparent 90deg,
+                rgba(var(--pink), .20) 170deg, transparent 220deg, rgba(var(--gold), .12) 280deg, transparent 330deg);
+    filter: blur(60px); animation: spin 70s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #bg { z-index: 1; width: 100vw; height: 100vh; }
+
+  /* 거대한 궤도 시계 (스탑워치 뒤에서 도는 세계) */
+  .world {
+    position: fixed; z-index: 2; left: 50%; top: 50%; width: 150vmin; height: 150vmin; pointer-events: none;
+    transform: translate(-50%, -50%) scale(.1); opacity: 0; will-change: transform;
+  }
+  .world svg { width: 100%; height: 100%; overflow: visible; }
+  .o-ring { fill: none; stroke: rgba(255,255,255,.16); }
+  .o-dash { fill: none; stroke: rgba(var(--cyan), .45); stroke-dasharray: 3 14.8; stroke-width: 10; }
+  .o-dots { fill: none; stroke: rgba(255,255,255,.3); stroke-dasharray: 1 12; stroke-width: 3; stroke-linecap: round; }
+  .o-num { fill: rgba(255,255,255,.3); font-size: 30px; text-anchor: middle; font-family: Georgia, serif; }
+  .planet { filter: drop-shadow(0 0 8px currentColor) drop-shadow(0 0 20px currentColor); }
+  .ripple { fill: none; stroke: rgb(var(--gold)); stroke-width: 3; transform-box: fill-box; transform-origin: center; animation: ripple 1.6s ease-out forwards; }
+  @keyframes ripple { from { transform: scale(1); opacity: .9; } to { transform: scale(4.2); opacity: 0; } }
+
+  /* 인트로 자막 */
+  .caption {
+    position: fixed; z-index: 9; left: 0; right: 0; top: 50%; text-align: center; padding: 0 24px; pointer-events: none;
+    word-break: keep-all; text-wrap: balance;
+    font-size: clamp(18px, 4.2vw, 30px); font-weight: 300; letter-spacing: .12em; color: #fff;
+    text-shadow: 0 0 24px rgba(var(--cyan), .9), 0 0 60px rgba(var(--violet), .8);
+    opacity: 0; transform: translateY(-50%) scale(.96); filter: blur(6px); transition: opacity 1s, transform 1.4s, filter 1s;
+  }
+  .caption.up { top: 9%; }
+  .caption.on { opacity: 1; transform: translateY(-50%) scale(1); filter: none; }
+
+  /* ================= 홀로그램 유리 카드 ================= */
+  .glass {
+    position: relative; z-index: 5; width: 100%; max-width: 400px; padding: 22px 20px 20px; border-radius: 28px;
+    background: linear-gradient(160deg, rgba(255,255,255,.12), rgba(255,255,255,.03));
+    border: 1px solid rgba(255,255,255,.2);
+    backdrop-filter: blur(16px) saturate(150%); -webkit-backdrop-filter: blur(16px) saturate(150%);
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), 0 0 60px rgba(var(--violet), .25), inset 0 1px 0 rgba(255,255,255,.3);
+    overflow: hidden; isolation: isolate;
+    transition: background 1.8s, border-color 1.8s, box-shadow 1.8s, backdrop-filter 1.8s, transform 1.8s cubic-bezier(.2,.8,.2,1);
+  }
+  .glass::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; mix-blend-mode: screen; transition: opacity 1.8s;
+    background:
+      radial-gradient(circle at var(--mx) var(--my), rgba(255,255,255,.22), transparent 42%),
+      linear-gradient(115deg, transparent 20%, rgba(var(--pink), .16) 35%, rgba(var(--cyan), .16) 50%, rgba(var(--gold), .14) 65%, transparent 80%);
+    background-size: 100% 100%, 260% 260%; background-position: 0 0, var(--mx) var(--my);
+  }
+  .glass::after {
+    content: ""; position: absolute; top: -20%; bottom: -20%; width: 45%; left: -60%; pointer-events: none; z-index: 4;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.55), transparent); transform: skewX(-18deg); opacity: 0;
+  }
+  .glass.flash::after { animation: sweep 1.3s ease-out; }
+  @keyframes sweep { 0% { left: -60%; opacity: 1; } 100% { left: 130%; opacity: 0; } }
+  /* 유리가 나타나기 전: 다이얼만 허공에 떠 있다 */
+  .glass.intro:not(.glass-on) {
+    background: transparent; border-color: transparent; box-shadow: none; transform: scale(.96);
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+  }
+  .glass.intro:not(.glass-on)::before { opacity: 0; }
+
+  /* ================= 다이얼 ================= */
+  .dial { position: relative; width: 100%; aspect-ratio: 1; }
+  .aura {
+    position: absolute; inset: 8%; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(var(--violet), .38), rgba(var(--cyan), .12) 55%, transparent 72%);
+    animation: breathe 4s ease-in-out infinite; transition: filter 1s;
+  }
+  .glass.running .aura { animation-duration: 1.2s; filter: saturate(1.6) brightness(1.3); }
+  @keyframes breathe { 50% { transform: scale(1.08); opacity: .7; } }
+  .dial svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .trail {
+    position: absolute; inset: 0; border-radius: 50%; pointer-events: none; transition: opacity .6s;
+    background: conic-gradient(from calc(var(--a, 0deg) - 80deg),
+      transparent 0deg, rgba(var(--pink), .35) 40deg, rgba(var(--cyan), .95) 80deg, transparent 80.4deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent 37%, #000 41.5%, #000 46%, transparent 49.5%);
+            mask: radial-gradient(farthest-side, transparent 37%, #000 41.5%, #000 46%, transparent 49.5%);
+    filter: blur(.5px);
+  }
+  .trail.idle { opacity: .25; }
+  .track { fill: none; stroke: rgba(255,255,255,.08); stroke-width: 2; }
+  .ring  { fill: none; stroke: url(#grad); stroke-width: 3; stroke-linecap: round; filter: url(#glow); }
+  .inner { fill: none; stroke: rgba(var(--cyan), .35); stroke-width: 1.5; stroke-dasharray: 1 7; stroke-linecap: round;
+           transform-box: fill-box; transform-origin: center; animation: spin 50s linear infinite; }
+  .inner2 { fill: none; stroke: rgba(var(--pink), .3); stroke-width: 1; stroke-dasharray: 10 6 2 6;
+            transform-box: fill-box; transform-origin: center; animation: spin 36s linear infinite reverse; }
+  .tick  { stroke: rgba(255,255,255,.35); stroke-width: 1.2; }
+  .tick.major { stroke: rgba(255,255,255,.85); stroke-width: 2; }
+  .num { fill: rgba(255,255,255,.5); font-size: 10px; text-anchor: middle; dominant-baseline: central; font-variant-numeric: tabular-nums; }
+  .hand-line { stroke: rgba(var(--cyan), .35); stroke-width: 1.5; }
+  .hand-head { fill: #fff; filter: drop-shadow(0 0 6px rgb(var(--cyan))) drop-shadow(0 0 14px rgb(var(--cyan))); }
+  .mark { fill: rgb(var(--gold)); filter: drop-shadow(0 0 6px rgb(var(--gold))); animation: pop .5s cubic-bezier(.3,1.8,.5,1); transform-box: fill-box; transform-origin: center; }
+  @keyframes pop { from { transform: scale(0); } to { transform: scale(1); } }
+
+  .ticks, .nums, .time, .btns, .laps, .hint-keys { transition: opacity 1.4s ease, transform 1.4s ease; }
+  .time {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+  .time b {
+    font-size: clamp(40px, 13vw, 58px); font-weight: 600; letter-spacing: 1px;
+    background: linear-gradient(180deg, #fff 30%, rgb(var(--cyan)) 130%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 12px rgba(var(--cyan), .55));
+  }
+  .time small { font-size: 24px; color: rgb(var(--pink)); text-shadow: 0 0 12px rgba(var(--pink), .8); margin-top: 2px; }
+
+  /* ================= 버튼 / 랩 ================= */
+  .btns { display: flex; gap: 10px; margin-top: 8px; position: relative; z-index: 2; }
+  button {
+    flex: 1; padding: 13px 0; font: 600 15px inherit; font-family: inherit; color: #fff; cursor: pointer;
+    border-radius: 14px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+    transition: transform .15s, background .2s, box-shadow .2s;
+  }
+  button:hover:not(:disabled) { background: rgba(255,255,255,.16); }
+  button:active:not(:disabled) { transform: scale(.96); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.go { background: linear-gradient(135deg, rgb(var(--cyan)), #7a6bff); color: #04101a; border: 0; box-shadow: 0 0 24px rgba(var(--cyan), .5); }
+  button.go.running { background: linear-gradient(135deg, rgb(var(--pink)), #ff7a5e); color: #1a0410; box-shadow: 0 0 24px rgba(var(--pink), .5); }
+  button:focus-visible { outline: 2px solid rgb(var(--gold)); outline-offset: 2px; }
+  ol { list-style: none; margin: 12px 0 0; padding: 0; max-height: 130px; overflow: auto; position: relative; z-index: 2; }
+  li { display: flex; justify-content: space-between; padding: 8px 4px; border-top: 1px solid rgba(255,255,255,.1); font-variant-numeric: tabular-nums; font-size: 14px; }
+  li span:first-child { color: rgb(var(--gold)); }
+  li span:nth-child(2) { color: rgba(255,255,255,.55); }
+  .hint-keys { text-align: center; font-size: 11px; color: rgba(255,255,255,.4); margin-top: 10px; position: relative; z-index: 2; }
+
+  /* ================= 인트로 상태 ================= */
+  .intro .ticks, .intro .nums, .intro .time, .intro .btns, .intro .laps, .intro .hint-keys { opacity: 0; }
+  .intro .time { transform: scale(.9); }
+  .intro.ticks-on .ticks, .intro.ticks-on .nums { opacity: 1; }
+  .intro.lit .time, .intro.lit .btns, .intro.lit .laps, .intro.lit .hint-keys { opacity: 1; transform: none; }
+  .intro .aura { opacity: 0; }
+  .intro.glass-on .aura { opacity: 1; }
+  .aura { transition: opacity 2s; }
+  .skip {
+    position: fixed; z-index: 10; bottom: 22px; left: 0; right: 0; text-align: center; font-size: 13px;
+    color: rgba(255,255,255,.55); animation: blink 1.6s ease-in-out infinite; pointer-events: none; transition: opacity .5s;
+  }
+  .skip.gone { opacity: 0; animation: none; }
+  @keyframes blink { 50% { opacity: .3; } }
+  /* ================= 디자인 디벨롭 ================= */
+  @property --spin { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+  @keyframes edgespin { to { --spin: 360deg; } }
+  /* 카드 테두리를 도는 무지갯빛 빛줄기 */
+  .edge {
+    position: absolute; inset: 0; border-radius: 28px; padding: 1.5px; pointer-events: none; z-index: 6; transition: opacity 1.8s;
+    background: conic-gradient(from var(--spin), transparent 0 50%, rgba(var(--cyan), .95) 66%, rgba(var(--violet), .95) 78%, rgba(var(--pink), .95) 90%, rgba(var(--gold), .95) 97%, transparent 100%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    animation: edgespin 5s linear infinite; filter: drop-shadow(0 0 6px rgba(var(--cyan), .7));
+  }
+  .glass.intro:not(.glass-on) .edge { opacity: 0; }
+  .glass.ready { transition: transform .25s ease-out; }
+  /* 다이얼 뒤로 퍼지는 후광 광선 */
+  .rays {
+    position: absolute; inset: -12%; border-radius: 50%; pointer-events: none; opacity: .9;
+    background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.11) 0deg 3deg, transparent 3deg 11deg);
+    -webkit-mask: radial-gradient(circle, transparent 28%, #000 46%, transparent 70%);
+            mask: radial-gradient(circle, transparent 28%, #000 46%, transparent 70%);
+    animation: spin 60s linear infinite;
+  }
+  .intro .rays { opacity: 0; } .rays { transition: opacity 2.5s; }
+  /* 다이얼 궤도를 도는 불꽃 */
+  .spark { transform-box: view-box; transform-origin: 150px 150px; animation: spin 9s linear infinite; }
+  .spark circle { filter: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 10px currentColor); animation: twinkle 1.6s ease-in-out infinite; }
+  .spark.s2 { animation-duration: 15s; animation-direction: reverse; }
+  .spark.s3 { animation-duration: 6.5s; }
+  @keyframes twinkle { 50% { opacity: .35; } }
+  .trail { animation: hue 14s linear infinite; }
+  @keyframes hue { to { filter: blur(.5px) hue-rotate(360deg); } }
+  /* 숫자: 흐르는 홀로그램 광택 */
+  .time b {
+    background: linear-gradient(100deg, #fff 15%, rgb(var(--cyan)) 35%, #fff 50%, rgb(var(--pink)) 65%, #fff 85%);
+    background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 6s ease-in-out infinite alternate;
+    filter: drop-shadow(0 0 10px rgba(var(--cyan), .6)) drop-shadow(0 0 26px rgba(var(--violet), .55));
+  }
+  @keyframes shimmer { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+  .time small { animation: glowpink 2.4s ease-in-out infinite alternate; }
+  @keyframes glowpink { to { text-shadow: 0 0 22px rgba(var(--pink), 1), 0 0 44px rgba(var(--pink), .6); } }
+  /* 시작 버튼: 흐르는 광택 */
+  button.go { position: relative; overflow: hidden; }
+  button.go::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 40%; left: -50%;
+    background: linear-gradient(100deg, transparent, rgba(255,255,255,.6), transparent); transform: skewX(-20deg);
+    animation: btnsweep 3.2s ease-in-out infinite;
+  }
+  @keyframes btnsweep { 60%, 100% { left: 130%; } }
+  /* 하단 네온 그리드 바닥 */
+  .grid {
+    position: absolute; left: -25%; right: -25%; bottom: -2%; height: 55%; opacity: .5; transform-origin: bottom;
+    transform: perspective(380px) rotateX(64deg);
+    background:
+      linear-gradient(rgba(var(--cyan), .55) 1.5px, transparent 1.5px) 0 0 / 100% 46px,
+      linear-gradient(90deg, rgba(var(--pink), .45) 1.5px, transparent 1.5px) 0 0 / 70px 100%;
+    -webkit-mask: linear-gradient(to top, #000 5%, transparent 80%); mask: linear-gradient(to top, #000 5%, transparent 80%);
+    animation: gridmove 2.4s linear infinite;
+  }
+  @keyframes gridmove { to { background-position: 0 46px, 0 0; } }
+  /* 입장 화면 + 소리 버튼 */
+  .gate {
+    position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    background: radial-gradient(circle at center, rgba(4,5,13,.35), rgba(4,5,13,.8)); transition: opacity 1.2s, visibility 1.2s; text-align: center; padding: 24px;
+  }
+  .gate.hide { opacity: 0; visibility: hidden; pointer-events: none; }
+  .gate h1 { margin: 0; font-size: clamp(34px, 11vw, 60px); font-weight: 200; letter-spacing: .5em; padding-left: .5em; color: #fff;
+    text-shadow: 0 0 20px rgba(var(--cyan), .9), 0 0 60px rgba(var(--violet), .9); }
+  .gate p { margin: 0 0 14px; color: rgba(255,255,255,.6); font-size: 14px; letter-spacing: .08em; }
+  .gate button.enter { flex: none; padding: 15px 34px; font-size: 16px; border-radius: 999px; background: linear-gradient(135deg, rgb(var(--cyan)), #7a6bff); color: #04101a; border: 0; box-shadow: 0 0 36px rgba(var(--cyan), .6); animation: breathe 2.4s ease-in-out infinite; }
+  .gate button.quiet { flex: none; background: none; border: 0; color: rgba(255,255,255,.5); font-size: 13px; text-decoration: underline; padding: 6px; }
+  .snd {
+    position: fixed; z-index: 12; top: 14px; right: 14px; flex: none; padding: 8px 14px; font-size: 12px; border-radius: 999px;
+    background: rgba(255,255,255,.1); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .snd.off { opacity: .6; }
+  /* 비네팅 + 마우스를 따라오는 스포트라이트 */
+  .vignette { z-index: 3; background: radial-gradient(ellipse at center, transparent 45%, rgba(2,3,10,.75) 100%); }
+  .spot { z-index: 3; mix-blend-mode: screen; background: radial-gradient(circle 320px at var(--px, 50%) var(--py, 50%), rgba(var(--cyan), .10), transparent 70%); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .edge, .rays, .spark, .spark circle, .trail, .time b, .time small, button.go::after, .grid { animation: none; }
+    .blob, .aurora::before, .inner, .inner2, .aura { animation: none; }
+    .glass.flash::after, .mark, .ripple { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="layer nebula" id="nebula"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div><div class="grid"></div></div>
+<div class="layer vignette"></div>
+<div class="layer spot"></div>
+<div class="layer aurora" id="aurora"></div>
+<canvas id="bg" class="layer"></canvas>
+
+<div class="world" id="world">
+  <svg viewBox="-500 -500 1000 1000" aria-hidden="true">
+    <circle class="o-ring" r="262"/>
+    <g id="g-planets-a"><circle class="planet" cx="262" cy="0" r="9" fill="#5ee7ff" style="color:#5ee7ff"/><circle class="planet" cx="-262" cy="0" r="5" fill="#fff" style="color:#fff"/></g>
+    <circle class="o-ring" r="340" style="stroke:rgba(255,255,255,.07)"/>
+    <g id="g-dash"><circle class="o-dash" r="340"/></g>
+    <g id="g-planets-b"><circle class="planet" cx="0" cy="-340" r="11" fill="#ff5ecb" style="color:#ff5ecb"/></g>
+    <circle class="o-ring" r="430" style="stroke:rgba(255,255,255,.08)"/>
+    <g id="g-nums"></g>
+    <g id="g-planets-c"><circle class="planet" cx="430" cy="0" r="7" fill="#ffe278" style="color:#ffe278"/></g>
+    <g id="g-dots"><circle class="o-dots" r="505"/></g>
+    <g id="g-ripples"></g>
+  </svg>
+</div>
+<div class="caption" id="caption"></div>
+
+<main class="glass intro" id="glass">
+  <div class="edge"></div>
+  <div class="dial">
+    <div class="rays"></div>
+    <div class="aura"></div>
+    <div class="trail idle" id="trail"></div>
+    <svg viewBox="0 0 300 300" aria-hidden="true">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#5ee7ff"/><stop offset=".55" stop-color="#8a7bff"/><stop offset="1" stop-color="#ff5ecb"/>
+        </linearGradient>
+        <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <circle class="track" cx="150" cy="150" r="130"/>
+      <circle class="inner" cx="150" cy="150" r="80"/>
+      <circle class="inner2" cx="150" cy="150" r="72"/>
+      <circle class="ring" id="ring" cx="150" cy="150" r="130" transform="rotate(-90 150 150)"/>
+      <g class="ticks" id="ticks"></g>
+      <g class="nums" id="nums"></g>
+      <g class="spark" style="color:#ffe278"><circle cx="150" cy="20" r="2" fill="currentColor"/></g>
+      <g class="spark s2" style="color:#ff5ecb"><circle cx="150" cy="280" r="2.4" fill="currentColor"/></g>
+      <g class="spark s3" style="color:#5ee7ff"><circle cx="20" cy="150" r="1.7" fill="currentColor"/></g>
+      <g id="marks"></g>
+      <g id="hand">
+        <line class="hand-line" x1="150" y1="150" x2="150" y2="26"/>
+        <circle class="hand-head" cx="150" cy="20" r="5.5"/>
+      </g>
+    </svg>
+    <div class="time" id="time" role="timer"><b>00:00</b><small>.00</small></div>
+  </div>
+  <div class="btns">
+    <button id="lap" disabled>랩</button>
+    <button id="start" class="go">시작</button>
+    <button id="reset" disabled>초기화</button>
+  </div>
+  <ol id="laps" class="laps"></ol>
+  <div class="hint-keys">스페이스 시작/정지 · L 랩 · R 초기화</div>
+</main>
+<div class="gate" id="gate">
+  <h1>TIME</h1>
+  <p>시간을 여는 10초의 여행</p>
+  <button class="enter" id="enterSound">입장하기 · 소리와 함께 ♪</button>
+  <button class="quiet" id="enterQuiet">소리 없이 입장</button>
+</div>
+<button class="snd" id="snd" aria-label="소리 켜기/끄기">♪ 소리 꺼짐</button>
+<div class="skip gone" id="skip">아무 키나 클릭해서 인트로 건너뛰기</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const NS = "http://www.w3.org/2000/svg";
+  const glass = $("glass"), ring = $("ring"), hand = $("hand"), trail = $("trail"), world = $("world");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DUR = 10;                                  // 인트로 전체 길이(초)
+  const C = 2 * Math.PI * 130;
+  ring.style.strokeDasharray = C;
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const ease = x => x < .5 ? 4 * x ** 3 : 1 - (-2 * x + 2) ** 3 / 2;
+  const easeOut = x => 1 - (1 - x) ** 3;
+
+  /* ---------- 다이얼 장식: 눈금 60개 + 숫자 12개 ---------- */
+  for (let i = 0; i < 60; i++) {
+    const major = i % 5 === 0, l = document.createElementNS(NS, "line");
+    l.setAttribute("class", "tick" + (major ? " major" : ""));
+    l.setAttribute("x1", 150); l.setAttribute("x2", 150);
+    l.setAttribute("y1", major ? 34 : 38); l.setAttribute("y2", major ? 46 : 44);
+    l.setAttribute("transform", `rotate(${i * 6} 150 150)`);
+    $("ticks").appendChild(l);
+  }
+  for (let i = 0; i < 12; i++) {
+    const a = i * 30 * Math.PI / 180, t = document.createElementNS(NS, "text");
+    t.setAttribute("class", "num"); t.textContent = i === 0 ? 60 : i * 5;
+    t.setAttribute("x", 150 + 92 * Math.sin(a)); t.setAttribute("y", 150 - 92 * Math.cos(a));
+    $("nums").appendChild(t);
+  }
+  /* 배경 궤도 시계의 큰 숫자 */
+  for (let i = 0; i < 12; i++) {
+    const t = document.createElementNS(NS, "text");
+    t.setAttribute("class", "o-num"); t.textContent = i === 0 ? 12 : i;
+    t.setAttribute("transform", `rotate(${i * 30}) translate(0 -430)`);
+    $("g-nums").appendChild(t);
+  }
+
+  const setAngle = deg => { hand.setAttribute("transform", `rotate(${deg} 150 150)`); trail.style.setProperty("--a", deg + "deg"); };
+
+  /* ---------- 스탑워치 상태 ---------- */
+  let elapsed = 0, startAt = 0, running = false, laps = [], lastLap = 0;
+  const now = () => elapsed + (running ? performance.now() - startAt : 0);
+  const p2 = n => String(n).padStart(2, "0");
+  const parts = ms => { const t = Math.floor(ms / 10); return [p2(Math.floor(t / 6000)) + ":" + p2(Math.floor(t / 100) % 60), "." + p2(t % 100)]; };
+  const text = ms => parts(ms).join("");
+
+  function renderTime() {
+    const ms = now(), [m, c] = parts(ms);
+    $("time").innerHTML = `<b>${m}</b><small>${c}</small>`;
+    setAngle((ms / 1000 % 60) * 6);
+  }
+  function toggle() {
+    if (running) { elapsed += performance.now() - startAt; running = false; }
+    else { startAt = performance.now(); running = true; }
+    $("start").textContent = running ? "정지" : "계속";
+    $("start").classList.toggle("running", running);
+    glass.classList.toggle("running", running);
+    trail.classList.toggle("idle", !running);
+    $("lap").disabled = !running; $("reset").disabled = false;
+    Sound.sfx(running ? "start" : "stop");
+  }
+  function lap() {
+    if (!running) return;
+    const t = now();
+    laps.unshift({ n: laps.length + 1, split: t - lastLap, total: t }); lastLap = t;
+    $("laps").innerHTML = laps.map(l => `<li><span>랩 ${l.n}</span><span>${text(l.split)}</span><span>${text(l.total)}</span></li>`).join("");
+    const a = (t / 1000 % 60) * 6 * Math.PI / 180, m = document.createElementNS(NS, "circle");
+    m.setAttribute("class", "mark"); m.setAttribute("r", 4.5);
+    m.setAttribute("cx", 150 + 130 * Math.sin(a)); m.setAttribute("cy", 150 - 130 * Math.cos(a));
+    $("marks").appendChild(m);
+    // 배경 궤도 시계로 퍼지는 파동
+    const r = document.createElementNS(NS, "circle");
+    r.setAttribute("class", "ripple"); r.setAttribute("r", 110);
+    Sound.sfx("lap"); $("g-ripples").appendChild(r); setTimeout(() => r.remove(), 1700);
+  }
+  function reset() {
+    running = false; elapsed = 0; lastLap = 0; laps = [];
+    $("laps").innerHTML = ""; $("marks").innerHTML = "";
+    $("start").textContent = "시작"; $("start").classList.remove("running"); glass.classList.remove("running");
+    trail.classList.add("idle"); $("lap").disabled = true; $("reset").disabled = true;
+  }
+
+  /* ---------- 배경 캔버스: 별의 항해, 유성, 보케 ---------- */
+  const cv = $("bg"), cx = cv.getContext("2d");
+  let W = 0, H = 0;
+  function resize() {
+    const d = Math.min(devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; cx.setTransform(d, 0, 0, d, 0, 0);
+  }
+  addEventListener("resize", resize); resize();
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const stars = Array.from({ length: 420 }, () => ({ x: rnd(-1, 1), y: rnd(-1, 1), z: rnd(.03, 1), h: rnd(190, 330) }));
+  const bokeh = Array.from({ length: 26 }, () => ({ x: Math.random(), y: Math.random(), r: rnd(14, 60), v: rnd(.006, .02), h: [190, 320, 50, 260][Math.floor(rnd(0, 4))], p: rnd(0, 6.3) }));
+  const shooters = []; let nextShoot = 3;
+  let warp = 1, ringMult = 1, introT = 0, bokehA = 0;
+
+  function drawBg(dt, time) {
+    cx.clearRect(0, 0, W, H);
+    const speed = .02 + warp * .9, focal = Math.max(W, H) * .5;
+    cx.lineCap = "round";
+    for (const s of stars) {
+      s.z -= speed * dt;
+      if (s.z < .02) { s.z = 1; s.x = rnd(-1, 1); s.y = rnd(-1, 1); }
+      const k = focal / s.z * .5, k0 = focal / (s.z + speed * .045) * .5;
+      const x = W / 2 + s.x * k, y = H / 2 + s.y * k, x0 = W / 2 + s.x * k0, y0 = H / 2 + s.y * k0;
+      if (x < -50 || x > W + 50 || y < -50 || y > H + 50) continue;
+      cx.strokeStyle = `hsla(${s.h},90%,${75 + 20 * (1 - s.z)}%,${.15 + .85 * (1 - s.z)})`;
+      cx.lineWidth = .6 + (1 - s.z) * 1.6;
+      cx.beginPath(); cx.moveTo(x0, y0); cx.lineTo(x, y); cx.stroke();
+    }
+    // 보케 (은은하게 떠오르는 빛 방울)
+    if (bokehA > 0) {
+      cx.globalCompositeOperation = "lighter";
+      for (const b of bokeh) {
+        b.y -= b.v * dt; if (b.y < -.1) { b.y = 1.1; b.x = Math.random(); }
+        const x = b.x * W + Math.sin(time * .0004 + b.p) * 30, y = b.y * H;
+        const g = cx.createRadialGradient(x, y, 0, x, y, b.r);
+        const a = bokehA * (.12 + .08 * Math.sin(time * .001 + b.p));
+        g.addColorStop(0, `hsla(${b.h},100%,70%,${a})`); g.addColorStop(1, `hsla(${b.h},100%,70%,0)`);
+        cx.fillStyle = g; cx.fillRect(x - b.r, y - b.r, b.r * 2, b.r * 2);
+      }
+      cx.globalCompositeOperation = "source-over";
+    }
+    // 유성
+    if (introT > 5 || !intro) {
+      nextShoot -= dt;
+      if (nextShoot <= 0) { nextShoot = rnd(2.5, 6); const a = rnd(.35, .6); Sound.shoot(); shooters.push({ x: rnd(W * .2, W * 1.0), y: rnd(-20, H * .4), vx: -Math.cos(a) * 900, vy: Math.sin(a) * 900, life: 1 }); }
+    }
+    for (let i = shooters.length - 1; i >= 0; i--) {
+      const s = shooters[i]; s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt * 1.1;
+      if (s.life <= 0) { shooters.splice(i, 1); continue; }
+      const g = cx.createLinearGradient(s.x, s.y, s.x - s.vx * .18, s.y - s.vy * .18);
+      g.addColorStop(0, `rgba(255,255,255,${s.life})`); g.addColorStop(1, "rgba(94,231,255,0)");
+      cx.strokeStyle = g; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(s.x, s.y); cx.lineTo(s.x - s.vx * .18, s.y - s.vy * .18); cx.stroke();
+    }
+  }
+
+  /* ---------- 사운드: Web Audio로 합성한 우주 앰비언트 (외부 음원 없음) ---------- */
+  const Sound = (() => {
+    let ctx, master, rev, delay, noise, on = false, t0 = 0, nextChord = 0, nextSpark = 0, chordIdx = 0, timer = null;
+    const CH = [[110, 164.81, 246.94, 261.63, 329.63], [87.31, 130.81, 164.81, 220, 261.63],
+                [130.81, 196, 246.94, 293.66, 329.63], [98, 146.83, 220, 246.94, 293.66]];   // Am9 · Fmaj7 · Cmaj9 · Gsus
+    const PENT = [880, 1046.5, 1174.7, 1318.5, 1568, 1760, 2093];
+    const r = (a, b) => a + Math.random() * (b - a);
+
+    function init() {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0;
+      const comp = ctx.createDynamicsCompressor(); master.connect(comp); comp.connect(ctx.destination);
+      const len = ctx.sampleRate * 3.6, buf = ctx.createBuffer(2, len, ctx.sampleRate);   // 합성 리버브 응답
+      for (let c = 0; c < 2; c++) { const d = buf.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2.6; }
+      rev = ctx.createConvolver(); rev.buffer = buf;
+      const rg = ctx.createGain(); rg.gain.value = .6; rev.connect(rg); rg.connect(master);
+      delay = ctx.createDelay(1); delay.delayTime.value = .375;
+      const fb = ctx.createGain(); fb.gain.value = .4; delay.connect(fb); fb.connect(delay); delay.connect(rev);
+      const dg = ctx.createGain(); dg.gain.value = .25; delay.connect(dg); dg.connect(master);
+      const nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
+      for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+      noise = nb;
+    }
+    function send(node, d = .5, w = .5, e = 0) {
+      const mk = (to, v) => { if (!v) return; const g = ctx.createGain(); g.gain.value = v; node.connect(g); g.connect(to); };
+      mk(master, d); mk(rev, w); mk(delay, e);
+    }
+    const noiseSrc = () => { const s = ctx.createBufferSource(); s.buffer = noise; s.loop = true; return s; };
+
+    function chord(i, t, first) {
+      const f = ctx.createBiquadFilter(); f.type = "lowpass"; f.Q.value = .8;
+      f.frequency.setValueAtTime(first ? 250 : 700, t); f.frequency.linearRampToValueAtTime(first ? 3200 : 2600, t + 7);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + 2.6); g.gain.setValueAtTime(1, t + 6); g.gain.linearRampToValueAtTime(0, t + 10.5);
+      f.connect(g); send(g, .55, .9, .15);
+      CH[i].forEach((fr, k) => [-7, 7].forEach(c => {
+        const o = ctx.createOscillator(); o.type = k === 0 ? "triangle" : "sawtooth"; o.frequency.value = fr; o.detune.value = c;
+        const og = ctx.createGain(); og.gain.value = k === 0 ? .05 : .022; o.connect(og); og.connect(f); o.start(t); o.stop(t + 11);
+      }));
+      const sub = ctx.createOscillator(), sg = ctx.createGain(); sub.frequency.value = CH[i][0] / 2;
+      sg.gain.setValueAtTime(0, t); sg.gain.linearRampToValueAtTime(.16, t + 3); sg.gain.setValueAtTime(.16, t + 6); sg.gain.linearRampToValueAtTime(0, t + 10);
+      sub.connect(sg); sg.connect(master); sub.start(t); sub.stop(t + 10.5);
+    }
+    function ping(f, t, vol = .05, dur = 2, pan = 0, wet = .8, echo = .5) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), p = ctx.createStereoPanner();
+      o.frequency.value = f; p.pan.value = pan;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0005, t + dur);
+      o.connect(g); g.connect(p); send(p, .4, wet, echo); o.start(t); o.stop(t + dur + .1);
+    }
+    function sweep(t, from, to, dur, vol, q = 1.5) {
+      const s = noiseSrc(), b = ctx.createBiquadFilter(), g = ctx.createGain();
+      b.type = "bandpass"; b.Q.value = q; b.frequency.setValueAtTime(from, t); b.frequency.exponentialRampToValueAtTime(to, t + dur);
+      g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(vol, t + dur * .93); g.gain.linearRampToValueAtTime(0, t + dur + .05);
+      s.connect(b); b.connect(g); send(g, .6, .5, 0); s.start(t); s.stop(t + dur + .1);
+    }
+    function introScript(t) {
+      // 0~7초: 워프의 저음 럼블 + 점점 차오르는 라이저
+      const s = noiseSrc(), lp = ctx.createBiquadFilter(), g = ctx.createGain();
+      lp.type = "lowpass"; lp.frequency.value = 140; g.gain.setValueAtTime(.22, t); g.gain.linearRampToValueAtTime(0, t + 7);
+      s.connect(lp); lp.connect(g); g.connect(master); s.start(t); s.stop(t + 7.1);
+      sweep(t, 200, 5200, 7.2, .1);
+      // 7.2초: 유리가 번쩍이는 순간 — 붐 + 윙 + 종소리
+      const b = ctx.createOscillator(), bg = ctx.createGain();
+      b.frequency.setValueAtTime(70, t + 7.2); b.frequency.exponentialRampToValueAtTime(28, t + 8.4);
+      bg.gain.setValueAtTime(.5, t + 7.2); bg.gain.exponentialRampToValueAtTime(.001, t + 9.2);
+      b.connect(bg); bg.connect(master); b.start(t + 7.2); b.stop(t + 9.3);
+      sweep(t + 7.2, 6000, 400, 1.2, .12, .8);
+      [880, 1318.5, 1760, 2637].forEach((f, k) => ping(f, t + 7.2 + k * .02, .06, 4.5, (k - 1.5) * .35, 1, .3));
+      // 8.5초~: 마무리 아르페지오
+      [880, 1318.5, 1760, 2637].forEach((f, k) => ping(f, t + 8.5 + k * .35, .07, 3, (k % 2 ? .5 : -.5), 1, .6));
+    }
+    const gap = m => m < 3 ? r(.9, 1.5) : m < 7 ? r(.35, .7) : m < 10 ? r(.2, .4) : r(.8, 1.6);
+    function tick() {
+      if (!on) return;
+      const now = ctx.currentTime;
+      while (nextChord < now + 1.5) { chord(chordIdx % 4, nextChord, chordIdx === 0 && t0 > now - 50); chordIdx++; nextChord += 8; }
+      while (nextSpark < now + .5) { ping(PENT[Math.floor(r(0, PENT.length))], nextSpark, .05, 2, r(-.7, .7), .8, .5); nextSpark += gap(nextSpark - t0); }
+    }
+    return {
+      get on() { return on; },
+      enable(withIntro) {
+        if (!ctx) init();
+        ctx.resume(); on = true;
+        const n = ctx.currentTime;
+        master.gain.cancelScheduledValues(n); master.gain.setValueAtTime(master.gain.value, n); master.gain.linearRampToValueAtTime(.85, n + (withIntro ? 1.5 : 2.5));
+        t0 = withIntro ? n + .05 : n - 100; nextChord = n + .05; nextSpark = n + .6; chordIdx = 0;
+        if (withIntro) introScript(t0);
+        clearInterval(timer); timer = setInterval(tick, 250); tick();
+      },
+      disable() {
+        if (!ctx) return;
+        on = false; clearInterval(timer);
+        const n = ctx.currentTime; master.gain.cancelScheduledValues(n); master.gain.setValueAtTime(master.gain.value, n); master.gain.linearRampToValueAtTime(0, n + .6);
+        setTimeout(() => { if (!on) ctx.suspend(); }, 700);
+      },
+      shoot() { if (on) { const n = ctx.currentTime, o = ctx.createOscillator(), g = ctx.createGain(); o.type = "sine";
+        o.frequency.setValueAtTime(2600, n); o.frequency.exponentialRampToValueAtTime(500, n + .6);
+        g.gain.setValueAtTime(.025, n); g.gain.exponentialRampToValueAtTime(.0005, n + .6); o.connect(g); send(g, .3, .8, .5); o.start(n); o.stop(n + .7); } },
+      sfx(kind) {
+        if (!on) return; const n = ctx.currentTime;
+        if (kind === "lap") { ping(1318.5, n, .08, 1.2, -.3); ping(1760, n + .07, .07, 1.4, .3); }
+        else if (kind === "start") { ping(660, n, .09, .8); ping(990, n + .06, .06, 1); }
+        else if (kind === "stop") { ping(440, n, .09, .8); ping(330, n + .06, .06, 1); }
+      },
+    };
+  })();
+
+  /* ---------- 인트로 연출 (총 10초) ---------- */
+  const captions = [
+    [.6, 3.1, "아주 먼 곳에서, 시간은 흐르고 있었습니다"],
+    [3.7, 6.3, "흩어진 빛이 하나의 궤도로 모입니다"],
+    [6.8, 8.1, "그리고 지금"],
+    [8.5, 9.9, "당신의 시간이 시작됩니다"],
+  ];
+  let intro = !reduce, started = reduce, introStart = performance.now(), flags = {}, capText = "";
+  const once = (k, fn) => { if (!flags[k]) { flags[k] = 1; fn(); } };
+
+  function setCaption(t) {
+    const c = intro ? captions.find(([a, b]) => t >= a && t < b) : null, el = $("caption");
+    if (c) { if (capText !== c[2]) { el.textContent = capText = c[2]; } el.classList.toggle("up", t >= 8.3); el.classList.add("on"); }
+    else el.classList.remove("on");
+  }
+  function endIntro() {
+    if (!intro) return;
+    intro = false;
+    glass.classList.remove("intro", "ticks-on", "lit", "glass-on");
+    $("nebula").classList.add("on"); $("aurora").classList.add("on");
+    hand.style.opacity = ""; trail.style.opacity = ""; ring.style.strokeDashoffset = 0; setAngle(0);
+    $("skip").classList.add("gone"); setCaption(99);
+  }
+
+  let last = performance.now(), orbA = [0, 0, 0, 0, 0], lastPointer = 0;
+  function frame(ts) {
+    const dt = Math.min((ts - last) / 1000, .05); last = ts;
+    const t = intro ? (started ? (performance.now() - introStart) / 1000 : 0) : DUR;
+    introT = t;
+
+    // 월드(거대 궤도 시계): 먼 은하처럼 작게 시작 → 회전하며 다가옴
+    const wk = intro ? ease(clamp((t - .5) / 6)) : 1;
+    world.style.transform = `translate(-50%,-50%) scale(${.1 + .9 * wk}) rotate(${(1 - wk) * -300}deg)`;
+    world.style.opacity = intro ? clamp(t / 2.5) : 1;
+
+    // 별: 워프 속도 → 서서히 감속
+    const wTarget = intro ? 1 - easeOut(clamp(t / 7.5)) : (running ? .08 : 0);
+    warp += (wTarget - warp) * Math.min(1, dt * (intro ? 6 : 2));
+    bokehA = intro ? clamp((t - 2) / 4) : 1;
+    ringMult += ((running ? 3.5 : 1) - ringMult) * Math.min(1, dt * 2);
+
+    // 궤도 회전 (실행 중에는 빨라진다)
+    const sp = [14, -5, 3, 8, 1.2].map(v => v * ringMult * dt);
+    orbA = orbA.map((a, i) => a + sp[i]);
+    $("g-planets-a").setAttribute("transform", `rotate(${orbA[0]})`);
+    $("g-dash").setAttribute("transform", `rotate(${orbA[1]})`);
+    $("g-nums").setAttribute("transform", `rotate(${orbA[2]})`);
+    $("g-planets-b").setAttribute("transform", `rotate(${orbA[3]})`);
+    $("g-planets-c").setAttribute("transform", `rotate(${-orbA[3] * .6})`);
+    $("g-dots").setAttribute("transform", `rotate(${orbA[4]})`);
+
+    if (intro) {
+      once("nebula", () => $("nebula").classList.add("on"));
+      if (t > 2) once("aurora", () => $("aurora").classList.add("on"));
+      // 4.5~7.5초: 빛줄기가 다이얼을 그린다
+      const k = ease(clamp((t - 4.5) / 3));
+      ring.style.strokeDashoffset = C * (1 - k);
+      hand.style.opacity = t > 4.5 ? 1 : 0;
+      setAngle(k * 360);
+      trail.style.opacity = t > 4.5 && t < 8.2 ? 1 : (t >= 8.2 ? "" : 0);
+      if (t > 6.5) once("ticks", () => glass.classList.add("ticks-on"));
+      if (t > 7) once("glass", () => glass.classList.add("glass-on"));
+      if (t > 7.4) once("flash", () => glass.classList.add("flash"));
+      if (t > 8.2) once("lit", () => glass.classList.add("lit"));
+      if (t >= DUR) endIntro();
+    } else renderTime();
+    setCaption(t);
+    drawBg(dt, ts);
+
+    if (performance.now() - lastPointer > 2000) {
+      const s = ts / 2500;
+      glass.style.setProperty("--mx", 50 + 35 * Math.sin(s) + "%");
+      glass.style.setProperty("--my", 40 + 30 * Math.cos(s * .8) + "%");
+    }
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener("pointermove", e => {
+    const r = glass.getBoundingClientRect();
+    glass.style.setProperty("--mx", ((e.clientX - r.left) / r.width * 100) + "%");
+    glass.style.setProperty("--my", ((e.clientY - r.top) / r.height * 100) + "%");
+    lastPointer = performance.now();
+    document.documentElement.style.setProperty("--px", e.clientX + "px");
+    document.documentElement.style.setProperty("--py", e.clientY + "px");
+    if (!intro && !reduce) {   // 카드가 마우스 쪽으로 살짝 기울어진다
+      glass.classList.add("ready");
+      glass.style.transform = `perspective(900px) rotateX(${(e.clientY / innerHeight - .5) * -9}deg) rotateY(${(e.clientX / innerWidth - .5) * 9}deg)`;
+    }
+  });
+
+  let skippedAt = 0;
+  addEventListener("pointerdown", () => { if (intro && started) { skippedAt = performance.now(); endIntro(); } }, true);
+  addEventListener("keydown", e => {
+    if (intro && !started) { if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); begin(true); } return; }
+    if (intro) { e.preventDefault(); endIntro(); return; }
+    if (e.code === "Space") { e.preventDefault(); toggle(); }
+    else if (e.key.toLowerCase() === "l") lap();
+    else if (e.key.toLowerCase() === "r" && !running) reset();
+  });
+  $("start").onclick = () => { if (performance.now() - skippedAt > 400) toggle(); };
+  $("lap").onclick = lap; $("reset").onclick = reset;
+
+  if (!intro) { glass.classList.remove("intro"); ring.style.strokeDashoffset = 0; $("skip").classList.add("gone"); $("nebula").classList.add("on"); $("aurora").classList.add("on"); }
+  /* ---------- 입장 화면 / 소리 버튼 ---------- */
+  const sndBtn = $("snd");
+  const sndLabel = () => { sndBtn.textContent = Sound.on ? "♪ 소리 켜짐" : "♪ 소리 꺼짐"; sndBtn.classList.toggle("off", !Sound.on); };
+  function begin(withSound) {
+    if (started) return;
+    started = true; introStart = performance.now();
+    $("gate").classList.add("hide"); $("skip").classList.remove("gone");
+    if (withSound) Sound.enable(true);
+    sndLabel();
+  }
+  sndBtn.onclick = () => { Sound.on ? Sound.disable() : Sound.enable(false); sndLabel(); sndBtn.blur(); };
+  $("enterSound").onclick = () => begin(true);
+  $("enterQuiet").onclick = () => begin(false);
+  if (reduce) $("gate").classList.add("hide");
+  sndLabel();
+  requestAnimationFrame(frame);
+</script>
+</body>
+</html>

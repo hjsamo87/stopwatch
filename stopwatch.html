@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>스탑워치</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --fg:#1c1f26; --muted:#7a8191; --accent:#2f6fed; --stop:#e5484d; --line:#e3e6ec; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#14161b; --card:#1d2027; --fg:#f1f3f7; --muted:#8a92a3; --accent:#5b8cff; --stop:#ff6369; --line:#2b2f38; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--fg); font-family:system-ui,"Malgun Gothic",sans-serif; padding:16px; }
+  .card { width:100%; max-width:420px; background:var(--card); border-radius:20px; padding:28px 24px;
+          box-shadow:0 8px 30px rgba(0,0,0,.08); }
+  .time { font-variant-numeric:tabular-nums; font-size:clamp(44px,13vw,64px); font-weight:600; text-align:center; letter-spacing:1px; }
+  .time small { font-size:.5em; color:var(--muted); }
+  .btns { display:flex; gap:12px; margin:24px 0 16px; }
+  button { flex:1; padding:14px; font-size:16px; font-weight:600; border:0; border-radius:12px; cursor:pointer;
+           background:var(--line); color:var(--fg); }
+  button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:var(--accent); color:#fff; }
+  button.primary.running { background:var(--stop); }
+  ol { list-style:none; margin:0; padding:0; max-height:240px; overflow:auto; }
+  li { display:flex; justify-content:space-between; padding:10px 4px; border-top:1px solid var(--line);
+       font-variant-numeric:tabular-nums; }
+  li span:first-child { color:var(--muted); }
+  .hint { text-align:center; color:var(--muted); font-size:12px; margin-top:12px; }
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="time" id="time" aria-live="off">00:00<small>.00</small></div>
+  <div class="btns">
+    <button id="lap" disabled>랩</button>
+    <button id="start" class="primary">시작</button>
+    <button id="reset" disabled>초기화</button>
+  </div>
+  <ol id="laps"></ol>
+  <div class="hint">단축키: 스페이스 시작/정지 · L 랩 · R 초기화</div>
+</main>
+<script>
+  const $ = id => document.getElementById(id);
+  let elapsed = 0, startAt = 0, timer = null, laps = [], lastLap = 0;
+
+  const fmt = ms => {
+    const t = Math.floor(ms / 10), cs = t % 100, s = Math.floor(t / 100) % 60, m = Math.floor(t / 6000);
+    const p = n => String(n).padStart(2, "0");
+    return { main: p(m) + ":" + p(s), cs: "." + p(cs) };
+  };
+  const text = ms => { const f = fmt(ms); return f.main + f.cs; };
+  const now = () => elapsed + (timer ? performance.now() - startAt : 0);
+
+  function render() {
+    const f = fmt(now());
+    $("time").innerHTML = f.main + "<small>" + f.cs + "</small>";
+  }
+  function tick() { render(); timer = requestAnimationFrame(tick); }
+
+  function toggle() {
+    if (timer) {
+      elapsed += performance.now() - startAt;
+      cancelAnimationFrame(timer); timer = null;
+      $("start").textContent = "계속"; $("start").classList.remove("running");
+      render();
+    } else {
+      startAt = performance.now(); timer = requestAnimationFrame(tick);
+      $("start").textContent = "정지"; $("start").classList.add("running");
+    }
+    $("lap").disabled = !timer;
+    $("reset").disabled = false;
+  }
+  function lap() {
+    if (!timer) return;
+    const t = now();
+    laps.unshift({ n: laps.length + 1, split: t - lastLap, total: t });
+    lastLap = t;
+    $("laps").innerHTML = laps.map(l =>
+      `<li><span>랩 ${l.n}</span><span>${text(l.split)}</span><span>${text(l.total)}</span></li>`).join("");
+  }
+  function reset() {
+    if (timer) cancelAnimationFrame(timer);
+    timer = null; elapsed = 0; lastLap = 0; laps = [];
+    $("laps").innerHTML = ""; $("start").textContent = "시작"; $("start").classList.remove("running");
+    $("lap").disabled = true; $("reset").disabled = true; render();
+  }
+
+  $("start").onclick = toggle; $("lap").onclick = lap; $("reset").onclick = reset;
+  addEventListener("keydown", e => {
+    if (e.code === "Space") { e.preventDefault(); toggle(); }
+    else if (e.key.toLowerCase() === "l") lap();
+    else if (e.key.toLowerCase() === "r" && !timer) reset();
+  });
+</script>
+</body>
+</html>
